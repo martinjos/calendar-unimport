@@ -80,18 +80,72 @@ get '/' do
                               :parameters => {'calendarId' => 'primary'},
                               :authorization => user_credentials)
   [result.status, {'Content-Type' => 'text/html'},
-   "<script type='text/javascript'>
-    function jsonTree(json) {
+   "<style type='text/css'>
+      .container {
+        padding: 10px;
+        border: 1px solid black;
+      }
+      .inner_container {
+        padding: 0;
+        margin: 0;
+        border: 0;
+        display: none;
+      }
+      .block_header {
+        padding: 10px;
+        background: red;
+      }
+      .item_header {
+        padding: 2px;
+        background: green;
+      }
+    </style>
+    <script type='text/javascript'>
+    function createElem(className) {
       var elem = document.createElement('div');
-      if (json == null) {
-        elem.innerHTML = 'null';
-      } else if (json instanceof Array) {
-        elem.innerHTML = 'Array';
-      } else if (json instanceof Object) {
-        elem.innerHTML = 'Hash';
-        for (var name in json) {
-          elem.innerHTML += '<br>' + name;
+      elem.className = className;
+      return elem;
+    }
+    function textNode(type, text) {
+      var elem = createElem(type);
+      elem.appendChild(document.createTextNode(text));
+      return elem;
+    }
+    function blockHeader(text) {
+      var node = textNode('block_header', text);
+      node.onclick = blockHeader_click;
+      return node;
+    }
+    function blockHeader_click(event) {
+      if (event.target.nextSibling) {
+        if (event.target.nextSibling.style.display == 'block') {
+          event.target.nextSibling.style.display = 'none';
+        } else {
+          event.target.nextSibling.style.display = 'block';
         }
+      }
+    }
+    function itemHeader(text) { return textNode('item_header', text); }
+    function jsonTree(json) {
+      var elem = createElem('container');
+      if (json == null) {
+      } else if (json instanceof Array) {
+        elem.appendChild(blockHeader('Array'));
+        var inner = createElem('inner_container');
+        elem.appendChild(inner);
+        for (var i=0; i<json.length; i++) {
+          inner.appendChild(jsonTree(json[i]));
+        }
+      } else if (json instanceof Object) {
+        elem.appendChild(blockHeader('Hash'));
+        var inner = createElem('inner_container');
+        elem.appendChild(inner);
+        for (var name in json) {
+          inner.appendChild(itemHeader(name));
+          inner.appendChild(jsonTree(json[name]));
+        }
+      } else {
+        elem.appendChild(document.createTextNode(json));
       }
       return elem;
     }
