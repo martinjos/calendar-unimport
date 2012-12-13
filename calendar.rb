@@ -74,6 +74,33 @@ get '/oauth2callback' do
   redirect to('/')
 end
 
+get '/summarise' do
+  result = api_client.execute(:api_method => settings.calendar.events.list,
+                              :parameters => {'calendarId' => 'primary'},
+                              :authorization => user_credentials)
+  numItems = result.data.items.size
+  numEvents = 0
+  numUIDs = 0
+  numGoogleUIDs = 0
+#  result.data.items.each {|item|
+#    if item.kind == 'calendar#event'
+#      numEvents += 1
+#    end
+#    if !item.iCalUID.nil?
+#      numUIDs += 1
+#      if item.iCalUID =~ /@google\.com$/
+#        numGoogleUIDs += 1
+#      end
+#    end
+#  }
+  [result.status, {'Content-Type' => 'text/html'},
+   "<p>numItems = #{result.data.items.size}" +
+   "<p>numEvents = #{numEvents}" +
+   "<p>numUIDs = #{numUIDs}" +
+   "<p>numGoogleUIDs = #{numGoogleUIDs}"
+   ]
+end
+
 get '/' do
   # Fetch list of events on the user's default calandar
   result = api_client.execute(:api_method => settings.calendar.events.list,
