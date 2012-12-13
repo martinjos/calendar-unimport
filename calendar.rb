@@ -1,3 +1,6 @@
+#!/usr/bin/env ruby
+# ex: set sw=2 et:
+
 require 'rubygems'
 require 'google/api_client'
 require 'sinatra'
@@ -30,8 +33,11 @@ configure do
   logger.level = Logger::DEBUG
   
   client = Google::APIClient.new
-  client.authorization.client_id = '...'
-  client.authorization.client_secret = '...'
+  File.open(Pathname.new(File.dirname(__FILE__)) + "local.cfg") {|fh|
+    lines = fh.readlines
+    client.authorization.client_id = lines[0].chomp
+    client.authorization.client_secret = lines[1].chomp
+  }
   client.authorization.scope = 'https://www.googleapis.com/auth/calendar'
 
   calendar = client.discovered_api('calendar', 'v3')
@@ -73,5 +79,26 @@ get '/' do
   result = api_client.execute(:api_method => settings.calendar.events.list,
                               :parameters => {'calendarId' => 'primary'},
                               :authorization => user_credentials)
-  [result.status, {'Content-Type' => 'application/json'}, result.data.to_json]
+  [result.status, {'Content-Type' => 'text/html'},
+   "<script type='text/javascript'>
+    function jsonTree(json) {
+      var elem = document.createElement('div');
+      if (json == null) {
+        elem.innerHTML = 'null';
+      } else if (json instanceof Array) {
+        elem.innerHTML = 'Array';
+      } else if (json instanceof Object) {
+        elem.innerHTML = 'Hash';
+        for (var name in json) {
+          elem.innerHTML += '<br>' + name;
+        }
+      }
+      return elem;
+    }
+    var json = #{result.data.to_json};
+    var node = jsonTree(json);
+    function onload() {
+      document.body.appendChild(node);
+    }
+    </script><body onload='onload()'></body>"]
 end
