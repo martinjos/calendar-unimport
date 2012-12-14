@@ -9,6 +9,8 @@ require 'logger'
 
 enable :sessions
 
+# N.B. uids.list can be created from an iCal file using
+# grep ^UID: filename.ics | cut -d: -f2- > uids.list
 $uids = {}
 File.open("../uids.list") {|fh| fh.readlines }
   .map(&:chomp)
