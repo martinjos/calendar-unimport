@@ -10,6 +10,9 @@ require 'submodules'
 
 enable :sessions
 
+set :bind, 'localhost'
+set :port, 4567
+
 # N.B. uids.list can be created from an iCal file using
 # grep ^UID: filename.ics | cut -d: -f2- > uids.list
 $uids = {}
@@ -27,6 +30,8 @@ def api_client; settings.api_client; end
 #set :api_client, nil
 
 def calendar_api; settings.calendar; end
+
+def profile_api; settings.profile; end
 
 def user_credentials
   # Build a per-request oauth credential based on token stored in session
@@ -51,13 +56,17 @@ configure do
     client.authorization.client_id = lines[0].chomp
     client.authorization.client_secret = lines[1].chomp
   }
-  client.authorization.scope = 'https://www.googleapis.com/auth/calendar'
+  client.authorization.scope = ['https://www.googleapis.com/auth/calendar',
+                                'https://www.googleapis.com/auth/userinfo.profile',
+                                'https://www.googleapis.com/auth/userinfo.email']
 
   calendar = client.discovered_api('calendar', 'v3')
+  profile = client.discovered_api('oauth2', 'v1')
 
   set :logger, logger
   set :api_client, client
   set :calendar, calendar
+  set :profile, profile
 end
 
 before do
@@ -106,7 +115,7 @@ def summary_or_action(action=false)
   keepDates = []
 
   begin
-    result = api_client.execute(:api_method => settings.calendar.events.list,
+    result = api_client.execute(:api_method => calendar_api.events.list,
                                 :parameters => parameters,
                                 :authorization => user_credentials)
 
@@ -150,21 +159,26 @@ def summary_or_action(action=false)
   if action
     # bug fixed partly thanks to http://stackoverflow.com/questions/9453812/google-calendar-insert-api-returning-400-required
     # (actually figured this out by looking at the 'drive' sample)
-    cal = settings.calendar.calendars.insert.request_schema.new({
+if 0
+    cal = calendar_api.calendars.insert.request_schema.new({
       'summary' => 'Calendar Unimport'
     });
     #cal.summary = 'Calendar Unimport'
-    result = api_client.execute(:api_method => settings.calendar.calendars.insert,
+    result = api_client.execute(:api_method => calendar_api.calendars.insert,
                                 :body_object => cal,
                                 :authorization => user_credentials)
-    [result.status, {'Content-Type' => 'text/html'},
-     json_viewer(result.data.to_json)]
+end # if 0
+#    [result.status, {'Content-Type' => 'text/html'},
+#     json_viewer(result.data.to_json)]
 #    [result.status, {'Content-Type' => 'text/html'},
 #     "<dl>" +
 #     "<dt>kind<dd>#{result.data.kind}" +
 #     "<dt>id<dd>#{result.data.id}" +
 #     "</dl>"
 #    ]
+    if result.status == 200 && result.kind == 'calendar#calendar' &&
+       !id.nil? && !id.empty?
+    end
   else
     [result.status, {'Content-Type' => 'text/html'},
      "<h2>Summary</h2>" +
@@ -197,9 +211,17 @@ get '/delete' do
   summary_or_action(true)
 end
 
+get '/email' do
+  # see also: prof_discovery
+  #[200, {'Content-Type' => 'text/plain'}, profile_api.userinfo.methods.sort.join("\n")]
+  result = api_client.execute(:api_method => profile_api.userinfo.get,
+                              :authorization => user_credentials)
+  [result.status, {'Content-Type' => 'text/html'}, json_viewer(result.data.to_json)]
+end
+
 get '/' do
   # Fetch list of events on the user's default calandar
-  result = api_client.execute(:api_method => settings.calendar.events.list,
+  result = api_client.execute(:api_method => calendar_api.events.list,
                               :parameters => {'calendarId' => 'primary'},
                               :authorization => user_credentials)
   [result.status, {'Content-Type' => 'text/html'},
@@ -214,10 +236,18 @@ def json_viewer(json)
   </script><body onload='onload(json)'></body>"
 end
 
-get '/discovery' do
-  [200, {'Content-Type' => 'text/html'}, json_viewer(settings.calendar.discovery_document.to_json)]
+get '/cal_discovery' do
+  [200, {'Content-Type' => 'text/html'}, json_viewer(calendar_api.discovery_document.to_json)]
+end
+
+get '/prof_discovery' do
+  [200, {'Content-Type' => 'text/html'}, json_viewer(profile_api.discovery_document.to_json)]
 end
 
 get '/modules' do
   [200, {'Content-Type' => 'text/plain'}, Google::APIClient.submodules.join("\n")]
+end
+
+get '/reset' do
+  user_credentials.access_token = nil
 end
