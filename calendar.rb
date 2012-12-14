@@ -10,6 +10,10 @@ require 'submodules'
 
 enable :sessions
 
+fail "Usage: calendar.rb calendar_name" if ARGV.size < 1
+cal_name = ARGV[0]
+$bak_name = "#{cal_name} (Calendar Unimport)"
+
 set :bind, 'localhost'
 set :port, 4567
 
@@ -98,6 +102,23 @@ get '/oauth2callback' do
   redirect to('/') # FIXME: should redirect to the original target
 end
 
+# FIXME: do paging (if the user has that many calendars)
+def get_calendars
+  result = api_client.execute(:api_method => calendar_api.calendar_list.list,
+                              :authorization => user_credentials)
+  cals = {}
+  if result.status == 200
+    result.data.items.each {|item|
+      if !cals.has_key?(item.summary)
+        cals[item.summary] = item.id
+      else
+        warn "More than one calendar has the name '#{item.summary}'"
+      end
+    }
+  end
+  cals
+end
+
 def summary_or_action(action=false)
   numPages = 0
   numItems = 0
@@ -115,6 +136,8 @@ def summary_or_action(action=false)
   keepDates = []
 
   begin
+    # FIXME: use the API's built-in iCalUID filtering instead of doing it
+    #        manually
     result = api_client.execute(:api_method => calendar_api.events.list,
                                 :parameters => parameters,
                                 :authorization => user_credentials)
@@ -163,29 +186,41 @@ def summary_or_action(action=false)
                                 :authorization => user_credentials)
     from_id = result.data.email
     to_id = nil
+    cals = {}
 
     if result.status == 200
-      cal = calendar_api.calendars.insert.request_schema.new({
-        'summary' => 'Calendar Unimport'
-      });
-      #cal.summary = 'Calendar Unimport'
-      result = api_client.execute(:api_method => calendar_api.calendars.insert,
-                                  :body_object => cal,
-                                  :authorization => user_credentials)
-      to_id = result.data.id
-  #    [result.status, {'Content-Type' => 'text/html'},
-  #     json_viewer(result.data.to_json)]
-  #    [result.status, {'Content-Type' => 'text/html'},
-  #     "<dl>" +
-  #     "<dt>kind<dd>#{result.data.kind}" +
-  #     "<dt>id<dd>#{result.data.id}" +
-  #     "</dl>"
-  #    ]
+      cals = get_calendars
+    end
+    
+    if result.status == 200
+      if cals.has_key?($bak_name)
+        to_id = cals[$bak_name]
+      else
+        cal = calendar_api.calendars.insert.request_schema.new({
+          'summary' => $bak_name
+        });
+        #cal.summary = 'Calendar Unimport'
+        result = api_client.execute(:api_method => calendar_api.calendars.insert,
+                                    :body_object => cal,
+                                    :authorization => user_credentials)
+        if result.status == 200
+          to_id = result.data.id
+        end
+    #    [result.status, {'Content-Type' => 'text/html'},
+    #     json_viewer(result.data.to_json)]
+    #    [result.status, {'Content-Type' => 'text/html'},
+    #     "<dl>" +
+    #     "<dt>kind<dd>#{result.data.kind}" +
+    #     "<dt>id<dd>#{result.data.id}" +
+    #     "</dl>"
+    #    ]
+      end
     end
 
     tried = 0
     failed = 0
     known_good = 0
+    r = nil
 
     if result.status == 200
       deleteIds.each {|eventId|
@@ -202,6 +237,7 @@ def summary_or_action(action=false)
         end
       }
       [result.status, {'Content-Type' => 'text/html'},
+       (r.status == 200 ? "" : json_viewer(r.data.to_json)) +
        "<h2>Results</h2>" +
        "<dl>" +
        "<dt>numPages<dd>#{numPages}" +
