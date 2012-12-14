@@ -217,6 +217,17 @@ def json_viewer(json)
     }
   </style>
   <script type='text/javascript'>
+
+  // getClass function from http://stackoverflow.com/questions/1249531/how-to-get-a-javascript-objects-class
+  function getClass(obj) {
+    if (typeof obj === 'undefined')
+      return 'undefined';
+    if (obj === null)
+      return 'null';
+    return Object.prototype.toString.call(obj)
+      .match(/^\\[object\\s(.*)\\]$/)[1];
+  }
+
   function createElem(className) {
     var elem = document.createElement('div');
     elem.className = className;
@@ -244,15 +255,15 @@ def json_viewer(json)
   function itemHeader(text) { return textNode('item_header', text); }
   function jsonTree(json) {
     var elem = createElem('container');
-    if (json == null) {
-    } else if (json instanceof Array) {
+    var cls = getClass(json);
+    if (cls == 'Array') {
       elem.appendChild(blockHeader('Array'));
       var inner = createElem('inner_container');
       elem.appendChild(inner);
       for (var i=0; i<json.length; i++) {
         inner.appendChild(jsonTree(json[i]));
       }
-    } else if (json instanceof Object) {
+    } else if (cls == 'Object') {
       elem.appendChild(blockHeader('Hash'));
       var inner = createElem('inner_container');
       elem.appendChild(inner);
@@ -269,6 +280,12 @@ def json_viewer(json)
   var node = jsonTree(json);
   function onload() {
     document.body.appendChild(node);
+
+    // open the top level
+    inners = node.getElementsByClassName('inner_container');
+    if (inners.length > 0) {
+      inners[0].style.display = 'block';
+    }
   }
   </script><body onload='onload()'></body>"
 end
