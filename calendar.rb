@@ -9,6 +9,13 @@ require 'logger'
 
 enable :sessions
 
+$uids = {}
+File.open("../uids.list") {|fh| fh.readlines }
+  .map(&:chomp)
+  .each{|uid|
+    $uids[uid] = uid
+  }
+
 def logger; settings.logger end
 
 def api_client; settings.api_client; end
@@ -49,7 +56,8 @@ end
 
 before do
   # Ensure user has authorized the app
-  unless user_credentials.access_token || request.path_info =~ /^\/oauth2/
+  unless ( user_credentials.access_token && !user_credentials.expired? ) ||
+         request.path_info =~ /^\/oauth2/
     redirect to('/oauth2authorize')
   end
 end
@@ -75,29 +83,54 @@ get '/oauth2callback' do
 end
 
 get '/summarise' do
-  result = api_client.execute(:api_method => settings.calendar.events.list,
-                              :parameters => {'calendarId' => 'primary'},
-                              :authorization => user_credentials)
-  numItems = result.data.items.size
+  numPages = 0
+  numItems = 0
   numEvents = 0
   numUIDs = 0
   numGoogleUIDs = 0
-#  result.data.items.each {|item|
-#    if item.kind == 'calendar#event'
-#      numEvents += 1
-#    end
-#    if !item.iCalUID.nil?
-#      numUIDs += 1
-#      if item.iCalUID =~ /@google\.com$/
-#        numGoogleUIDs += 1
-#      end
-#    end
-#  }
+  numToDelete = 0
+
+  parameters = {'calendarId' => 'primary'}
+
+  begin
+    result = api_client.execute(:api_method => settings.calendar.events.list,
+                                :parameters => parameters,
+                                :authorization => user_credentials)
+
+    numItems += result.data.items.size
+    result.data.items.each {|item|
+      if item.kind == 'calendar#event'
+        numEvents += 1
+      end
+      if !item.iCalUID.nil?
+        numUIDs += 1
+        if item.iCalUID =~ /@google\.com$/
+          numGoogleUIDs += 1
+        end
+        if $uids.has_key?(item.iCalUID)
+          numToDelete += 1
+        end
+      end
+    }
+
+    parameters['pageToken'] = nil
+    if !result.data['nextPageToken'].nil? && !result.data['nextPageToken'].empty?
+      parameters['pageToken'] = result.data['nextPageToken']
+    end
+
+    $stderr.puts "Moving successfully onto next page"
+
+  end while !parameters['pageToken'].nil?
+
   [result.status, {'Content-Type' => 'text/html'},
-   "<p>numItems = #{result.data.items.size}" +
-   "<p>numEvents = #{numEvents}" +
-   "<p>numUIDs = #{numUIDs}" +
-   "<p>numGoogleUIDs = #{numGoogleUIDs}"
+   "<dl>" +
+   "<dt>numPages<dd>#{numPages}" +
+   "<dt>numItems<dd>#{result.data.items.size}" +
+   "<dt>numEvents<dd>#{numEvents}" +
+   "<dt>numUIDs<dd>#{numUIDs}" +
+   "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
+   "<dt>numToDelete<dd>#{numToDelete}" +
+   "</dl>"
    ]
 end
 
