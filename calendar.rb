@@ -159,26 +159,63 @@ def summary_or_action(action=false)
   if action
     # bug fixed partly thanks to http://stackoverflow.com/questions/9453812/google-calendar-insert-api-returning-400-required
     # (actually figured this out by looking at the 'drive' sample)
-if 0
-    cal = calendar_api.calendars.insert.request_schema.new({
-      'summary' => 'Calendar Unimport'
-    });
-    #cal.summary = 'Calendar Unimport'
-    result = api_client.execute(:api_method => calendar_api.calendars.insert,
-                                :body_object => cal,
+    result = api_client.execute(:api_method => profile_api.userinfo.get,
                                 :authorization => user_credentials)
-end # if 0
-#    [result.status, {'Content-Type' => 'text/html'},
-#     json_viewer(result.data.to_json)]
-#    [result.status, {'Content-Type' => 'text/html'},
-#     "<dl>" +
-#     "<dt>kind<dd>#{result.data.kind}" +
-#     "<dt>id<dd>#{result.data.id}" +
-#     "</dl>"
-#    ]
-    if result.status == 200 && result.kind == 'calendar#calendar' &&
-       !id.nil? && !id.empty?
+    from_id = result.data.email
+    to_id = nil
+
+    if result.status == 200
+      cal = calendar_api.calendars.insert.request_schema.new({
+        'summary' => 'Calendar Unimport'
+      });
+      #cal.summary = 'Calendar Unimport'
+      result = api_client.execute(:api_method => calendar_api.calendars.insert,
+                                  :body_object => cal,
+                                  :authorization => user_credentials)
+      to_id = result.data.id
+  #    [result.status, {'Content-Type' => 'text/html'},
+  #     json_viewer(result.data.to_json)]
+  #    [result.status, {'Content-Type' => 'text/html'},
+  #     "<dl>" +
+  #     "<dt>kind<dd>#{result.data.kind}" +
+  #     "<dt>id<dd>#{result.data.id}" +
+  #     "</dl>"
+  #    ]
     end
+
+    tried = 0
+    failed = 0
+    known_good = 0
+
+    if result.status == 200
+      deleteIds.each {|eventId|
+        r = api_client.execute(:api_method => calendar_api.events.move,
+                               :parameters => {'calendarId' => from_id,
+                                               'destination' => to_id,
+                                               'eventId' => eventId},
+                               :authorization => user_credentials)
+        tried += 1
+        if r.status != 200
+          failed += 1
+        elsif r.data.kind == 'calendar#event'
+          known_good += 1
+        end
+      }
+      [result.status, {'Content-Type' => 'text/html'},
+       "<h2>Results</h2>" +
+       "<dl>" +
+       "<dt>numPages<dd>#{numPages}" +
+       "<dt>numItems<dd>#{numItems}" +
+       "<dt>numEvents<dd>#{numEvents}" +
+       "<dt>numUIDs<dd>#{numUIDs}" +
+       "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
+       "<dt>numToDelete<dd>#{numToDelete}" +
+       "<dt>tried<dd>#{tried}" +
+       "<dt>failed<dd>#{failed}" +
+       "<dt>known_good<dd>#{known_good}" +
+       "</dl>"]
+    end
+
   else
     [result.status, {'Content-Type' => 'text/html'},
      "<h2>Summary</h2>" +
@@ -216,7 +253,7 @@ get '/email' do
   #[200, {'Content-Type' => 'text/plain'}, profile_api.userinfo.methods.sort.join("\n")]
   result = api_client.execute(:api_method => profile_api.userinfo.get,
                               :authorization => user_credentials)
-  [result.status, {'Content-Type' => 'text/html'}, json_viewer(result.data.to_json)]
+  [result.status, {'Content-Type' => 'text/plain'}, result.data.email]
 end
 
 get '/' do
