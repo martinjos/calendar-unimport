@@ -6,6 +6,7 @@ require 'google/api_client'
 require 'sinatra'
 require 'google/api_client'
 require 'logger'
+require 'submodules'
 
 enable :sessions
 
@@ -21,6 +22,9 @@ File.open("../uids.list") {|fh| fh.readlines }
 def logger; settings.logger end
 
 def api_client; settings.api_client; end
+
+# for debug
+#set :api_client, nil
 
 def calendar_api; settings.calendar; end
 
@@ -79,9 +83,10 @@ end
 
 get '/oauth2callback' do
   # Exchange token
+  #$stderr.puts "OAUTH2 CALLBACK PARAMS ARE #{params.keys.join(", ")}"
   user_credentials.code = params[:code] if params[:code]
   user_credentials.fetch_access_token!
-  redirect to('/')
+  redirect to('/') # FIXME: should redirect to the original target
 end
 
 def summary_or_action(action=false)
@@ -143,8 +148,14 @@ def summary_or_action(action=false)
   keepDates = keepDates.sort.uniq
 
   if action
+    # bug fixed partly thanks to http://stackoverflow.com/questions/9453812/google-calendar-insert-api-returning-400-required
+    # (actually figured this out by looking at the 'drive' sample)
+    cal = settings.calendar.calendars.insert.request_schema.new({
+      'summary' => 'Calendar Unimport'
+    });
+    #cal.summary = 'Calendar Unimport'
     result = api_client.execute(:api_method => settings.calendar.calendars.insert,
-                                :parameters => {'summary' => 'calendar-unimport'},
+                                :body_object => cal,
                                 :authorization => user_credentials)
     [result.status, {'Content-Type' => 'text/html'},
      json_viewer(result.data.to_json)]
@@ -201,4 +212,12 @@ def json_viewer(json)
   <script type='text/javascript'>
   var json = #{json};
   </script><body onload='onload(json)'></body>"
+end
+
+get '/discovery' do
+  [200, {'Content-Type' => 'text/html'}, json_viewer(settings.calendar.discovery_document.to_json)]
+end
+
+get '/modules' do
+  [200, {'Content-Type' => 'text/plain'}, Google::APIClient.submodules.join("\n")]
 end
