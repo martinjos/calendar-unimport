@@ -7,7 +7,7 @@ function getClass(obj) {
   if (obj === null)
     return 'null';
   return Object.prototype.toString.call(obj)
-    .match(/^\\[object\\s(.*)\\]$/)[1];
+    .match(/^\[object\s(.*)\]$/)[1];
 }
 
 function createElem(className) {
