@@ -1,6 +1,11 @@
 #!/usr/bin/env ruby
 # ex: set sw=2 et:
 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the README.md file for details.
+
 require 'rubygems'
 require 'google/api_client'
 require 'sinatra'
