@@ -92,6 +92,11 @@ get '/summarise' do
 
   parameters = {'calendarId' => 'primary'}
 
+  toDelete = []
+  deleteDates = []
+  toKeep = []
+  keepDates = []
+
   begin
     result = api_client.execute(:api_method => settings.calendar.events.list,
                                 :parameters => parameters,
@@ -109,6 +114,12 @@ get '/summarise' do
         end
         if $uids.has_key?(item.iCalUID)
           numToDelete += 1
+          toDelete << item.summary
+          deleteDates << item.created.strftime('%F')
+          #puts "item.created.class = #{item.created.class}"
+        else
+          toKeep << item.summary
+          keepDates << item.created.strftime('%F')
         end
       end
     }
@@ -122,7 +133,13 @@ get '/summarise' do
 
   end while !parameters['pageToken'].nil?
 
+  toDelete = toDelete.sort.uniq
+  toKeep = toKeep.sort.uniq
+  deleteDates = deleteDates.sort.uniq
+  keepDates = keepDates.sort.uniq
+
   [result.status, {'Content-Type' => 'text/html'},
+   "<h2>Summary</h2>" +
    "<dl>" +
    "<dt>numPages<dd>#{numPages}" +
    "<dt>numItems<dd>#{numItems}" +
@@ -130,7 +147,16 @@ get '/summarise' do
    "<dt>numUIDs<dd>#{numUIDs}" +
    "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
    "<dt>numToDelete<dd>#{numToDelete}" +
-   "</dl>"
+   "</dl>" +
+   "<h2>To Delete</h2>" +
+   "<select size='20'>" + toDelete.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+   "<h2>Delete Dates</h2>" +
+   "<select size='20'>" + deleteDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+   "<h2>To Keep</h2>" +
+   "<select size='20'>" + toKeep.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+   "<h2>Keep Dates</h2>" +
+   "<select size='20'>" + keepDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+   ""
    ]
 end
 
