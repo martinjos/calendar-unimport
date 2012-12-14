@@ -84,7 +84,7 @@ get '/oauth2callback' do
   redirect to('/')
 end
 
-get '/summarise' do
+def summary_or_action(action=false)
   numPages = 0
   numItems = 0
   numEvents = 0
@@ -94,6 +94,7 @@ get '/summarise' do
 
   parameters = {'calendarId' => 'primary'}
 
+  deleteIds = []
   toDelete = []
   deleteDates = []
   toKeep = []
@@ -116,6 +117,7 @@ get '/summarise' do
         end
         if $uids.has_key?(item.iCalUID)
           numToDelete += 1
+          deleteIds << item.id
           toDelete << item.summary
           deleteDates << item.created.strftime('%F')
           #puts "item.created.class = #{item.created.class}"
@@ -140,26 +142,48 @@ get '/summarise' do
   deleteDates = deleteDates.sort.uniq
   keepDates = keepDates.sort.uniq
 
-  [result.status, {'Content-Type' => 'text/html'},
-   "<h2>Summary</h2>" +
-   "<dl>" +
-   "<dt>numPages<dd>#{numPages}" +
-   "<dt>numItems<dd>#{numItems}" +
-   "<dt>numEvents<dd>#{numEvents}" +
-   "<dt>numUIDs<dd>#{numUIDs}" +
-   "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
-   "<dt>numToDelete<dd>#{numToDelete}" +
-   "</dl>" +
-   "<h2>To Delete</h2>" +
-   "<select size='20'>" + toDelete.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
-   "<h2>Delete Dates</h2>" +
-   "<select size='20'>" + deleteDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
-   "<h2>To Keep</h2>" +
-   "<select size='20'>" + toKeep.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
-   "<h2>Keep Dates</h2>" +
-   "<select size='20'>" + keepDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
-   ""
-   ]
+  if action
+    result = api_client.execute(:api_method => settings.calendar.calendars.insert,
+                                :parameters => {'summary' => 'calendar-unimport'},
+                                :authorization => user_credentials)
+    [result.status, {'Content-Type' => 'text/html'},
+     json_viewer(result.data.to_json)]
+#    [result.status, {'Content-Type' => 'text/html'},
+#     "<dl>" +
+#     "<dt>kind<dd>#{result.data.kind}" +
+#     "<dt>id<dd>#{result.data.id}" +
+#     "</dl>"
+#    ]
+  else
+    [result.status, {'Content-Type' => 'text/html'},
+     "<h2>Summary</h2>" +
+     "<dl>" +
+     "<dt>numPages<dd>#{numPages}" +
+     "<dt>numItems<dd>#{numItems}" +
+     "<dt>numEvents<dd>#{numEvents}" +
+     "<dt>numUIDs<dd>#{numUIDs}" +
+     "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
+     "<dt>numToDelete<dd>#{numToDelete}" +
+     "</dl>" +
+     "<h2>To Delete</h2>" +
+     "<select size='20'>" + toDelete.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+     "<h2>Delete Dates</h2>" +
+     "<select size='20'>" + deleteDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+     "<h2>To Keep</h2>" +
+     "<select size='20'>" + toKeep.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+     "<h2>Keep Dates</h2>" +
+     "<select size='20'>" + keepDates.map{|s| "<option>#{s}</option>" }.join("") + "</select>" +
+     ""
+     ]
+  end
+end
+
+get '/summarise' do
+  summary_or_action(false)
+end
+
+get '/delete' do
+  summary_or_action(true)
 end
 
 get '/' do
@@ -168,79 +192,83 @@ get '/' do
                               :parameters => {'calendarId' => 'primary'},
                               :authorization => user_credentials)
   [result.status, {'Content-Type' => 'text/html'},
-   "<style type='text/css'>
-      .container {
-        padding: 10px;
-        border: 1px solid black;
-      }
-      .inner_container {
-        padding: 0;
-        margin: 0;
-        border: 0;
-        display: none;
-      }
-      .block_header {
-        padding: 10px;
-        background: red;
-      }
-      .item_header {
-        padding: 2px;
-        background: green;
-      }
-    </style>
-    <script type='text/javascript'>
-    function createElem(className) {
-      var elem = document.createElement('div');
-      elem.className = className;
-      return elem;
+   json_viewer(result.data.to_json)]
+end
+
+def json_viewer(json)
+ "<style type='text/css'>
+    .container {
+      padding: 10px;
+      border: 1px solid black;
     }
-    function textNode(type, text) {
-      var elem = createElem(type);
-      elem.appendChild(document.createTextNode(text));
-      return elem;
+    .inner_container {
+      padding: 0;
+      margin: 0;
+      border: 0;
+      display: none;
     }
-    function blockHeader(text) {
-      var node = textNode('block_header', text);
-      node.onclick = blockHeader_click;
-      return node;
+    .block_header {
+      padding: 10px;
+      background: red;
     }
-    function blockHeader_click(event) {
-      if (event.target.nextSibling) {
-        if (event.target.nextSibling.style.display == 'block') {
-          event.target.nextSibling.style.display = 'none';
-        } else {
-          event.target.nextSibling.style.display = 'block';
-        }
-      }
+    .item_header {
+      padding: 2px;
+      background: green;
     }
-    function itemHeader(text) { return textNode('item_header', text); }
-    function jsonTree(json) {
-      var elem = createElem('container');
-      if (json == null) {
-      } else if (json instanceof Array) {
-        elem.appendChild(blockHeader('Array'));
-        var inner = createElem('inner_container');
-        elem.appendChild(inner);
-        for (var i=0; i<json.length; i++) {
-          inner.appendChild(jsonTree(json[i]));
-        }
-      } else if (json instanceof Object) {
-        elem.appendChild(blockHeader('Hash'));
-        var inner = createElem('inner_container');
-        elem.appendChild(inner);
-        for (var name in json) {
-          inner.appendChild(itemHeader(name));
-          inner.appendChild(jsonTree(json[name]));
-        }
+  </style>
+  <script type='text/javascript'>
+  function createElem(className) {
+    var elem = document.createElement('div');
+    elem.className = className;
+    return elem;
+  }
+  function textNode(type, text) {
+    var elem = createElem(type);
+    elem.appendChild(document.createTextNode(text));
+    return elem;
+  }
+  function blockHeader(text) {
+    var node = textNode('block_header', text);
+    node.onclick = blockHeader_click;
+    return node;
+  }
+  function blockHeader_click(event) {
+    if (event.target.nextSibling) {
+      if (event.target.nextSibling.style.display == 'block') {
+        event.target.nextSibling.style.display = 'none';
       } else {
-        elem.appendChild(document.createTextNode(json));
+        event.target.nextSibling.style.display = 'block';
       }
-      return elem;
     }
-    var json = #{result.data.to_json};
-    var node = jsonTree(json);
-    function onload() {
-      document.body.appendChild(node);
+  }
+  function itemHeader(text) { return textNode('item_header', text); }
+  function jsonTree(json) {
+    var elem = createElem('container');
+    if (json == null) {
+    } else if (json instanceof Array) {
+      elem.appendChild(blockHeader('Array'));
+      var inner = createElem('inner_container');
+      elem.appendChild(inner);
+      for (var i=0; i<json.length; i++) {
+        inner.appendChild(jsonTree(json[i]));
+      }
+    } else if (json instanceof Object) {
+      elem.appendChild(blockHeader('Hash'));
+      var inner = createElem('inner_container');
+      elem.appendChild(inner);
+      for (var name in json) {
+        inner.appendChild(itemHeader(name));
+        inner.appendChild(jsonTree(json[name]));
+      }
+    } else {
+      elem.appendChild(document.createTextNode(json));
     }
-    </script><body onload='onload()'></body>"]
+    return elem;
+  }
+  var json = #{json};
+  var node = jsonTree(json);
+  function onload() {
+    document.body.appendChild(node);
+  }
+  </script><body onload='onload()'></body>"
 end
