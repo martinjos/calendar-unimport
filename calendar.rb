@@ -118,14 +118,14 @@ get '/summarise' do
       parameters['pageToken'] = result.data['nextPageToken']
     end
 
-    $stderr.puts "Moving successfully onto next page"
+    numPages += 1
 
   end while !parameters['pageToken'].nil?
 
   [result.status, {'Content-Type' => 'text/html'},
    "<dl>" +
    "<dt>numPages<dd>#{numPages}" +
-   "<dt>numItems<dd>#{result.data.items.size}" +
+   "<dt>numItems<dd>#{numItems}" +
    "<dt>numEvents<dd>#{numEvents}" +
    "<dt>numUIDs<dd>#{numUIDs}" +
    "<dt>numGoogleUIDs<dd>#{numGoogleUIDs}" +
